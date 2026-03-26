@@ -1223,43 +1223,78 @@ function stopCamera(resetResult = true) {
 let model = null;
 const CLASSES = ['glass', 'metal', 'paper', 'plastic'];
 
-function setModelStatus(msg, color) {
-  const el = document.getElementById('model-status');
-  if (!el) return;
-  el.style.borderLeftColor = color;
-  el.querySelector('div').textContent = msg;
-  el.querySelector('div').style.color = color;
+<script>
+let model = null;
+
+function setModelStatus(message, color = 'var(--muted)') {
+  const statusEl = document.getElementById('modelStatus');
+  if (!statusEl) return;
+
+  statusEl.style.display = 'block';
+  statusEl.style.color = color;
+  statusEl.style.whiteSpace = 'pre-wrap';
+  statusEl.textContent = message;
 }
 
 async function loadModel() {
+  const modelUrl = new URL('./tfjs_model/model.json', window.location.href).href;
+
   try {
-    setModelStatus('⏳ Загружаем модель...', 'var(--warning)');
-    
-    model = await tf.loadLayersModel('./tfjs_model/model.json');
-    
-    setModelStatus('✅ Модель загружена', 'var(--success)');
-    console.log('Модель успешно загружена');
+    setModelStatus(
+      `⏳ Загружаем модель...\n${modelUrl}`,
+      'var(--warning)'
+    );
+
+    console.log('Пробуем загрузить LayersModel:', modelUrl);
+
+    model = await tf.loadLayersModel(modelUrl);
+
+    console.log('Модель успешно загружена как LayersModel');
+    setModelStatus(
+      `✅ Модель загружена\n${modelUrl}`,
+      'var(--success)'
+    );
+    return;
   } catch (e1) {
     console.error('loadLayersModel error:', e1);
 
     try {
-      console.warn('loadLayersModel не сработал, пробуем loadGraphModel...', e1.message);
-      model = await tf.loadGraphModel('./tfjs_model/model.json');
-      setModelStatus('✅ Модель загружена (GraphModel)', 'var(--success)');
-      console.log('GraphModel успешно загружена');
+      console.log('Пробуем загрузить GraphModel:', modelUrl);
+
+      model = await tf.loadGraphModel(modelUrl);
+
+      console.log('Модель успешно загружена как GraphModel');
+      setModelStatus(
+        `✅ Модель загружена (GraphModel)\n${modelUrl}`,
+        'var(--success)'
+      );
+      return;
     } catch (e2) {
       console.error('loadGraphModel error:', e2);
 
-      const msg = `
-❌ Модель не загрузилась:
-loadLayersModel: ${e1?.message || e1}
-loadGraphModel: ${e2?.message || e2}
-      `.trim();
+      const details = [
+        '❌ Модель не загрузилась',
+        '',
+        `URL: ${modelUrl}`,
+        '',
+        `loadLayersModel: ${e1?.message || String(e1)}`,
+        `loadGraphModel: ${e2?.message || String(e2)}`,
+        '',
+        'Проверь:',
+        '1) открывается ли URL выше вручную',
+        '2) нет ли 404',
+        '3) не закешировалась ли старая версия страницы'
+      ].join('\n');
 
-      setModelStatus(msg, 'var(--hazard)');
+      setModelStatus(details, 'var(--hazard)');
     }
   }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadModel();
+});
+</script>
 
 // ─── АНАЛИЗ ФОТО ─────────────────────────────────────────────────────────────
 
