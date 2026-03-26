@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ВТОРник — Умная сортировка мусора</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=PyjL_rI53Y1tfF7tJSqRzbETpAwOw2ED3iy1LULRp38akkTVaB2vwcivDbwpKTc5l40Paciue92BmYa_atQCwNqN0ax_E6aLOrsUEeUbBPApWyFcmbHG3L-VjpQTE3fHE-Qpnqq7usMkPE9dni-nqFePzIysBtTYUy1-lwifUC-eK-n8j6lIAAg8QImfn2y05o0q2V6-N6F_yAUaWBa9o72Ajs8b3vdb9VApKIRYjMxp62RMd-9QhBywa0tVUTSmFywUK_GmIvUnJYbzzRSZFw" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMGYwZTg3MjJmOWY3Mjg4YTNkNDljYWZhMCZ0cz00OTI5MzAmcD1mcyZjaWQ9MSZzaWc9MmE5YWEzMjFiZjNlZjBlZjFmN2QyZjVhNzNmY2FkNzQ0OWZiNWNmODc4ZmJkY2ViZDZjZWE4MWJkZDUyZWUxZSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -1223,11 +1223,9 @@ function stopCamera(resetResult = true) {
 let model = null;
 const CLASSES = ['glass', 'metal', 'paper', 'plastic'];
 
-<script>
-let model = null;
 
-function setModelStatus(message, color = 'var(--muted)') {
-  const statusEl = document.getElementById('modelStatus');
+function setModelStatus(message, color = 'var(--text-muted)') {
+  const statusEl = document.getElementById('model-status');
   if (!statusEl) return;
 
   statusEl.style.display = 'block';
@@ -1242,7 +1240,7 @@ async function loadModel() {
   try {
     setModelStatus(
       `⏳ Загружаем модель...\n${modelUrl}`,
-      'var(--warning)'
+      'var(--text-muted)'
     );
 
     console.log('Пробуем загрузить LayersModel:', modelUrl);
@@ -1252,7 +1250,7 @@ async function loadModel() {
     console.log('Модель успешно загружена как LayersModel');
     setModelStatus(
       `✅ Модель загружена\n${modelUrl}`,
-      'var(--success)'
+      'var(--accent)'
     );
     return;
   } catch (e1) {
@@ -1266,7 +1264,7 @@ async function loadModel() {
       console.log('Модель успешно загружена как GraphModel');
       setModelStatus(
         `✅ Модель загружена (GraphModel)\n${modelUrl}`,
-        'var(--success)'
+        'var(--accent)'
       );
       return;
     } catch (e2) {
@@ -1294,7 +1292,6 @@ async function loadModel() {
 document.addEventListener('DOMContentLoaded', () => {
   loadModel();
 });
-</script>
 
 // ─── АНАЛИЗ ФОТО ─────────────────────────────────────────────────────────────
 
