@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ВТОРник — Умная сортировка мусора</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --accent: #39d353;
+    --accent2: #58a6ff;
+    --accent3: #f0883e;
+
+    --plastic: #58a6ff;
+    --paper: #f0883e;
+    --glass: #3fb950;
+    --metal: #a5d6ff;
+    --organic: #7ee787;
+    --hazard: #ff7b72;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(57,211,83,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57,211,83,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 16px 100px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    padding: 40px 0 32px;
+    text-align: center;
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #39d353, #58a6ff);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #39d353, #58a6ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .header-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 300;
+    letter-spacing: 0.3px;
+  }
+
+  /* Main action buttons */
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .action-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 20px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .action-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.25s;
+    border-radius: 20px;
+  }
+
+  .action-btn.camera::before { background: radial-gradient(circle at 50% 0%, rgba(57,211,83,0.12), transparent 70%); }
+  .action-btn.search::before { background: radial-gradient(circle at 50% 0%, rgba(88,166,255,0.12), transparent 70%); }
+
+  .action-btn:hover { transform: translateY(-3px); border-color: transparent; }
+  .action-btn.camera:hover { box-shadow: 0 8px 30px rgba(57,211,83,0.2); border-color: rgba(57,211,83,0.3); }
+  .action-btn.search:hover { box-shadow: 0 8px 30px rgba(88,166,255,0.2); border-color: rgba(88,166,255,0.3); }
+  .action-btn:hover::before { opacity: 1; }
+
+  .action-btn:active { transform: translateY(0); }
+
+  .btn-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    margin: 0 auto 14px;
+  }
+
+  .camera .btn-icon { background: rgba(57,211,83,0.12); }
+  .search .btn-icon { background: rgba(88,166,255,0.12); }
+
+  .btn-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .camera .btn-label { color: var(--accent); }
+  .search .btn-label { color: var(--accent2); }
+
+  .btn-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* Waste categories */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  .categories {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 32px;
+    scrollbar-width: none;
+  }
+  .categories::-webkit-scrollbar { display: none; }
+
+  .cat-pill {
+    flex-shrink: 0;
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: all 0.2s;
+    background: var(--surface);
+  }
+
+  .cat-pill[data-cat="plastic"] { color: var(--plastic); border-color: rgba(88,166,255,0.25); }
+  .cat-pill[data-cat="paper"] { color: var(--paper); border-color: rgba(240,136,62,0.25); }
+  .cat-pill[data-cat="glass"] { color: var(--glass); border-color: rgba(63,185,80,0.25); }
+  .cat-pill[data-cat="metal"] { color: var(--metal); border-color: rgba(165,214,255,0.25); }
+  .cat-pill[data-cat="organic"] { color: var(--organic); border-color: rgba(126,231,135,0.25); }
+  .cat-pill[data-cat="hazard"] { color: var(--hazard); border-color: rgba(255,123,114,0.25); }
+
+  .cat-pill.active[data-cat="plastic"] { background: rgba(88,166,255,0.15); border-color: var(--plastic); }
+  .cat-pill.active[data-cat="paper"] { background: rgba(240,136,62,0.15); border-color: var(--paper); }
+  .cat-pill.active[data-cat="glass"] { background: rgba(63,185,80,0.15); border-color: var(--glass); }
+  .cat-pill.active[data-cat="metal"] { background: rgba(165,214,255,0.15); border-color: var(--metal); }
+  .cat-pill.active[data-cat="organic"] { background: rgba(126,231,135,0.15); border-color: var(--organic); }
+  .cat-pill.active[data-cat="hazard"] { background: rgba(255,123,114,0.15); border-color: var(--hazard); }
+
+  /* Category Info Card */
+  .cat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 22px;
+    margin-bottom: 32px;
+    display: none;
+    animation: fadeUp 0.3s ease;
+  }
+
+  .cat-card.visible { display: block; }
+
+  .cat-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .cat-emoji {
+    font-size: 32px;
+    width: 52px;
+    height: 52px;
+    background: var(--surface2);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cat-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .cat-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .cat-bin {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  .cat-items {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .cat-items strong {
+    color: var(--text);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .item-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .item-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  /* Camera Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    width: 100%;
+    max-width: 440px;
+    overflow: hidden;
+    animation: slideUp 0.3s ease;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    background: var(--surface2);
+    border: none;
+    border-radius: 8px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .modal-close:hover { background: var(--border); color: var(--text); }
+
+  .modal-body { padding: 20px; }
+
+  /* Camera view */
+  .camera-view {
+    position: relative;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    margin-bottom: 16px;
+  }
+
+  #videoEl {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .camera-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .scan-frame {
+    width: 160px;
+    height: 160px;
+    position: relative;
+  }
+
+  .scan-frame::before, .scan-frame::after,
+  .scan-corner-br, .scan-corner-bl {
+    content: '';
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+
+  .scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+  .scan-frame::after { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+  .scan-corner-br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+  .scan-corner-bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+
+  .scan-line {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scanMove 2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .camera-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .camera-placeholder .ph-icon { font-size: 48px; opacity: 0.4; }
+
+  .cam-btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .cam-btn-row .btn-primary {
+    min-width: 0;
+  }
+
+  #photoPreview {
+    display: none;
+    background: #000;
+  }
+
+  .btn-primary {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-green {
+    background: linear-gradient(135deg, #39d353, #2ea043);
+    color: #0d1117;
+  }
+
+  .btn-green:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(57,211,83,0.3); }
+  .btn-green:active { transform: translateY(0); }
+
+  .btn-outline {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .btn-outline:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Result card */
+  .result-card {
+    background: var(--surface2);
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 14px;
+    display: none;
+    animation: fadeUp 0.3s ease;
+  }
+
+  .result-card.visible { display: block; }
+
+  .result-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .result-type {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+
+  .result-bin-info {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .confidence-bar {
+    margin-top: 12px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+
+  .confidence-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Search Modal */
+  .search-input-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+
+  .search-input-wrap .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  #searchInput {
+    width: 100%;
+    padding: 13px 14px 13px 42px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #searchInput:focus { border-color: var(--accent2); }
+  #searchInput::placeholder { color: var(--text-muted); }
+
+  .search-results { max-height: 340px; overflow-y: auto; scrollbar-width: thin; }
+
+  .search-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border: 1px solid transparent;
+    margin-bottom: 6px;
+  }
+
+  .search-item:hover { background: var(--surface2); border-color: var(--border); }
+
+  .si-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .si-info { flex: 1; min-width: 0; }
+
+  .si-name {
+    font-weight: 500;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .si-type {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .si-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .no-results .nr-icon { font-size: 36px; margin-bottom: 8px; opacity: 0.4; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: rgba(13,17,23,0.9);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    padding: 12px 24px 20px;
+    display: flex;
+    justify-content: space-around;
+    z-index: 10;
+  }
+
+  .nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn:hover { color: var(--text); }
+
+  .nav-icon { font-size: 22px; }
+  .nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.3px; }
+
+  /* Tips section */
+  .tips-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .tip-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    transition: border-color 0.2s;
+  }
+
+  .tip-card:hover { border-color: rgba(57,211,83,0.3); }
+  .tip-emoji { font-size: 22px; margin-bottom: 8px; }
+
+  .tip-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .tip-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* Page sections */
+  .page { display: none; }
+  .page.active { display: block; animation: fadeUp 0.3s ease; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scanMove {
+    0%, 100% { top: 8px; }
+    50% { top: calc(100% - 10px); }
+  }
+
+  /* Pulse animation for the scan btn */
+  .pulse-ring {
+    position: relative;
+    display: inline-block;
+  }
+
+  .pulse-ring::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 22px;
+    border: 2px solid var(--accent);
+    opacity: 0;
+    animation: pulse 2s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.9); opacity: 0.6; }
+    100% { transform: scale(1.15); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- HOME PAGE -->
+  <div class="page active" id="page-home">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">♻️</div>
+        <span class="logo-text">ВТОРник</span>
+      </div>
+      <p class="header-sub">Умная сортировка отходов</p>
+    </div>
+
+    <!-- Main actions -->
+    <div class="actions">
+      <button class="action-btn camera pulse-ring" onclick="openModal('camera-modal')">
+        <div class="btn-icon">📷</div>
+        <span class="btn-label">Сканировать</span>
+        <span class="btn-desc">Сфотографируй предмет или включи камеру</span>
+      </button>
+      <button class="action-btn search" onclick="openModal('search-modal')">
+        <div class="btn-icon">🔍</div>
+        <span class="btn-label">Поиск</span>
+        <span class="btn-desc">Найди по названию продукта</span>
+      </button>
+    </div>
+
+    <!-- Category filter -->
+    <p class="section-title">Категории отходов</p>
+    <div class="categories">
+      <div class="cat-pill" data-cat="plastic" onclick="showCat('plastic')">🔵 Пластик</div>
+      <div class="cat-pill" data-cat="paper" onclick="showCat('paper')">🟠 Бумага</div>
+      <div class="cat-pill" data-cat="glass" onclick="showCat('glass')">🟢 Стекло</div>
+      <div class="cat-pill" data-cat="metal" onclick="showCat('metal')">⚪ Металл</div>
+      <div class="cat-pill" data-cat="organic" onclick="showCat('organic')">🌿 Органика</div>
+      <div class="cat-pill" data-cat="hazard" onclick="showCat('hazard')">⚠️ Опасное</div>
+    </div>
+
+    <!-- Category info card -->
+    <div class="cat-card" id="cat-card"></div>
+
+    <!-- Tips -->
+    <p class="section-title">Советы по сортировке</p>
+    <div class="tips-grid">
+      <div class="tip-card">
+        <div class="tip-emoji">🧼</div>
+        <div class="tip-title">Чистота важна</div>
+        <div class="tip-text">Ополаскивай контейнеры перед сдачей в переработку</div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-emoji">🏷️</div>
+        <div class="tip-title">Убери этикетки</div>
+        <div class="tip-text">Бумажные этикетки с бутылок лучше снимать</div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-emoji">📦</div>
+        <div class="tip-title">Сминай картон</div>
+        <div class="tip-text">Сложенные коробки экономят место в контейнере</div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-emoji">🚫</div>
+        <div class="tip-title">Не смешивай</div>
+        <div class="tip-text">Один загрязнённый предмет портит всю партию</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GUIDE PAGE -->
+  <div class="page" id="page-guide">
+    <div style="padding: 32px 0 20px;">
+      <p class="section-title">Справочник переработки</p>
+    </div>
+    <div id="guide-list"></div>
+  </div>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" onclick="setPage('home', this)">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Главная</span>
+    </button>
+    <button class="nav-btn" onclick="setPage('guide', this)">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">Справочник</span>
+    </button>
+    <button class="nav-btn" onclick="openModal('camera-modal')">
+      <span class="nav-icon">📷</span>
+      <span class="nav-label">Сканировать</span>
+    </button>
+    <button class="nav-btn" onclick="openModal('search-modal')">
+      <span class="nav-icon">🔍</span>
+      <span class="nav-label">Поиск</span>
+    </button>
+  </nav>
+</div>
+
+<!-- CAMERA MODAL -->
+<div class="modal-overlay" id="camera-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">📷 Фото или камера</span>
+      <button class="modal-close" onclick="closeModal('camera-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="camera-view">
+        <video id="videoEl" autoplay playsinline></video>
+        <img id="photoPreview" alt="Выбранное фото" style="display:none; width:100%; height:100%; object-fit:cover;" />
+        <div class="camera-overlay" id="cam-overlay-placeholder">
+          <div class="camera-placeholder">
+            <div class="ph-icon">📷</div>
+            <span>Сделай фото или включи живую камеру</span>
+          </div>
+        </div>
+        <div class="camera-overlay" id="cam-scan-overlay" style="display:none;">
+          <div class="scan-frame">
+            <div class="scan-corner-br"></div>
+            <div class="scan-corner-bl"></div>
+            <div class="scan-line"></div>
+          </div>
+        </div>
+      </div>
+
+      <input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none;" />
+
+      <div class="cam-btn-row" style="margin-bottom: 10px;">
+        <button class="btn-primary btn-green" onclick="document.getElementById('photoInput').click()">📸 Сделать фото</button>
+        <button class="btn-primary btn-outline" id="camStartBtn" onclick="startCamera()">▶ Живая камера</button>
+      </div>
+
+      <div class="cam-btn-row">
+        <button class="btn-primary btn-outline" id="camSnapBtn" onclick="analyzePhoto()" style="display:none;">🤖 Анализировать кадр</button>
+        <button class="btn-primary btn-outline" id="camUsePhotoBtn" onclick="analyzeSelectedPhoto()" style="display:none;">🧠 Анализировать фото</button>
+        <button class="btn-primary btn-outline" id="camStopBtn" onclick="stopCamera()" style="display:none; max-width: 88px; flex: 0 0 88px;">⏹ Стоп</button>
+      </div>
+
+      <div class="result-card" id="cam-result">
+        <div class="result-label">Результат анализа</div>
+        <div class="result-type" id="result-type-text">—</div>
+        <div class="result-bin-info" id="result-bin-text">—</div>
+        <div class="confidence-bar">
+          <div class="confidence-fill" id="conf-fill" style="width: 0%"></div>
+        </div>
+        <div class="confidence-label">
+          <span>Уверенность модели</span>
+          <span id="conf-pct">—</span>
+        </div>
+        <div style="margin-top:12px; padding-top:12px; border-top: 1px solid var(--border);">
+          <div style="font-size:11px; color: var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.8px;">Что делать:</div>
+          <div id="result-action" style="font-size:13px; line-height:1.6;"></div>
+        </div>
+      </div>
+
+      <div id="model-status" style="margin-top: 12px; padding: 10px 14px; background: var(--surface2); border-radius: 10px; border-left: 3px solid var(--text-muted);">
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">⏳ Загрузка модели...</div>
+      </div>
+
+      <div style="margin-top: 10px; padding: 12px 14px; background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.18); border-radius: 10px;">
+        <div style="font-size: 12px; line-height: 1.55; color: var(--text-muted);">
+          <strong style="color: var(--text);">Для телефона:</strong> режим <strong>«Сделать фото»</strong> работает стабильнее всего.
+          Режим <strong>«Живая камера»</strong> лучше запускать уже после публикации на GitHub Pages по HTTPS.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SEARCH MODAL -->
+<div class="modal-overlay" id="search-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🔍 Поиск по продукту</span>
+      <button class="modal-close" onclick="closeModal('search-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Например: бутылка, газета, банан..." oninput="doSearch(this.value)" autofocus>
+      </div>
+      <div class="search-results" id="search-results">
+        <div class="no-results">
+          <div class="nr-icon">🔎</div>
+          Начни вводить название продукта
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+
+const CATEGORIES = {
+  plastic: {
+    name: 'Пластик',
+    emoji: '🔵',
+    color: '#58a6ff',
+    binColor: 'rgba(88,166,255,0.15)',
+    bin: '🔵 Синий контейнер',
+    subtitle: 'Тип 1–7 (смотри маркировку)',
+    canThrow: ['ПЭТ бутылки', 'Флаконы шампуня', 'Пакеты и плёнки', 'Контейнеры для еды', 'Канистры', 'Упаковка от молока', 'Пластиковые крышки'],
+    cannotThrow: ['Пластик с остатками еды', 'Грязные пакеты', 'Пластик с фольгой'],
+    tip: 'Обязательно промой и высуши контейнеры перед сдачей.'
+  },
+  paper: {
+    name: 'Бумага',
+    emoji: '🟠',
+    color: '#f0883e',
+    binColor: 'rgba(240,136,62,0.15)',
+    bin: '🟠 Оранжевый контейнер',
+    subtitle: 'Картон, газеты, офисная бумага',
+    canThrow: ['Газеты и журналы', 'Картонные коробки', 'Офисная бумага', 'Книги', 'Бумажные пакеты', 'Упаковочная бумага', 'Тетради'],
+    cannotThrow: ['Грязная бумага', 'Ламинированная бумага', 'Чеки (термобумага)', 'Бумажные стаканы с воском'],
+    tip: 'Сложи картонные коробки — это сэкономит место.'
+  },
+  glass: {
+    name: 'Стекло',
+    emoji: '🟢',
+    color: '#3fb950',
+    binColor: 'rgba(63,185,80,0.15)',
+    bin: '🟢 Зелёный контейнер',
+    subtitle: 'Прозрачное и цветное стекло',
+    canThrow: ['Стеклянные бутылки', 'Банки из-под варенья', 'Флаконы духов', 'Банки из-под соусов', 'Аптечные пузырьки'],
+    cannotThrow: ['Зеркала', 'Оконное стекло', 'Хрусталь', 'Термостойкое стекло (Pyrex)', 'Лампочки'],
+    tip: 'Металлические крышки с банок можно сдать отдельно как металл.'
+  },
+  metal: {
+    name: 'Металл',
+    emoji: '⚪',
+    color: '#a5d6ff',
+    binColor: 'rgba(165,214,255,0.15)',
+    bin: '⚪ Серый контейнер',
+    subtitle: 'Алюминий, жесть, сталь',
+    canThrow: ['Алюминиевые банки', 'Жестяные консервы', 'Фольга', 'Металлические крышки', 'Аэрозоли (пустые)', 'Алюминиевые лотки'],
+    cannotThrow: ['Аэрозоли под давлением', 'Батарейки', 'Металл с токсичным содержимым', 'Острые предметы'],
+    tip: 'Сожми алюминиевые банки для экономии места в контейнере.'
+  },
+  organic: {
+    name: 'Органика',
+    emoji: '🌿',
+    color: '#7ee787',
+    binColor: 'rgba(126,231,135,0.15)',
+    bin: '🟤 Коричневый контейнер',
+    subtitle: 'Пищевые отходы, растения',
+    canThrow: ['Овощные и фруктовые отходы', 'Кофейная гуща', 'Чайные пакетики', 'Остатки еды', 'Листья и трава', 'Яичная скорлупа'],
+    cannotThrow: ['Мясо и рыба', 'Масло и жиры', 'Молочные продукты', 'Кости'],
+    tip: 'Органику лучше компостировать — это отличное удобрение!'
+  },
+  hazard: {
+    name: 'Опасные отходы',
+    emoji: '⚠️',
+    color: '#ff7b72',
+    binColor: 'rgba(255,123,114,0.15)',
+    bin: '🔴 Пункт приема опасных отходов',
+    subtitle: 'Требуют специальной утилизации',
+    canThrow: ['Батарейки и аккумуляторы', 'Лампочки (энергосберегающие)', 'Краски и растворители', 'Лекарства с истекшим сроком', 'Ртутные термометры', 'Химикаты'],
+    cannotThrow: [],
+    tip: '⚠️ Никогда не выбрасывай опасные отходы в обычный мусор!'
+  }
+};
+
+const WASTE_DB = [
+  { name: 'ПЭТ бутылка', cat: 'plastic', keywords: ['бутылка', 'пэт', 'пластик', 'минеральная вода', 'лимонад'] },
+  { name: 'Пластиковый пакет', cat: 'plastic', keywords: ['пакет', 'пленка', 'целлофан', 'майка'] },
+  { name: 'Флакон шампуня', cat: 'plastic', keywords: ['шампунь', 'флакон', 'гель', 'мыло жидкое'] },
+  { name: 'Контейнер для еды', cat: 'plastic', keywords: ['контейнер', 'лоток', 'упаковка еда'] },
+  { name: 'Пластиковая крышка', cat: 'plastic', keywords: ['крышка'] },
+  { name: 'Газета', cat: 'paper', keywords: ['газета', 'журнал', 'бумага', 'листовка'] },
+  { name: 'Картонная коробка', cat: 'paper', keywords: ['коробка', 'картон', 'упаковка', 'гофрокартон'] },
+  { name: 'Офисная бумага', cat: 'paper', keywords: ['бумага', 'лист', 'принтер', 'а4'] },
+  { name: 'Тетрадь', cat: 'paper', keywords: ['тетрадь', 'блокнот', 'записная'] },
+  { name: 'Бумажный пакет', cat: 'paper', keywords: ['пакет бумага', 'крафт', 'бумажный пакет'] },
+  { name: 'Стеклянная бутылка', cat: 'glass', keywords: ['бутылка стекло', 'стеклянная', 'вино', 'пиво стекло'] },
+  { name: 'Банка (стеклянная)', cat: 'glass', keywords: ['банка', 'варенье', 'консервация', 'соус стекло', 'огурцы'] },
+  { name: 'Флакон духов', cat: 'glass', keywords: ['духи', 'парфюм', 'флакон стекло'] },
+  { name: 'Алюминиевая банка', cat: 'metal', keywords: ['банка ал', 'алюминий', 'кола', 'пиво банка', 'напиток банка'] },
+  { name: 'Жестяная консерва', cat: 'metal', keywords: ['консервы', 'тушенка', 'горошек', 'жесть', 'рыбные консервы'] },
+  { name: 'Фольга', cat: 'metal', keywords: ['фольга', 'алюминиевая фольга'] },
+  { name: 'Пищевые отходы', cat: 'organic', keywords: ['остатки еды', 'кожура', 'очистки', 'овощи', 'фрукты', 'органика'] },
+  { name: 'Банановая кожура', cat: 'organic', keywords: ['банан', 'кожура банана'] },
+  { name: 'Кофейная гуща', cat: 'organic', keywords: ['кофе', 'гуща', 'кофейная', 'кофейный'] },
+  { name: 'Батарейка', cat: 'hazard', keywords: ['батарейка', 'аккумулятор', 'батарея'] },
+  { name: 'Лампочка', cat: 'hazard', keywords: ['лампочка', 'лампа', 'энергосберегающая'] },
+  { name: 'Лекарства', cat: 'hazard', keywords: ['лекарство', 'таблетки', 'препарат', 'медикамент', 'аптека'] },
+  { name: 'Краска', cat: 'hazard', keywords: ['краска', 'растворитель', 'лак', 'эмаль'] },
+  { name: 'Ртутный термометр', cat: 'hazard', keywords: ['термометр', 'ртуть', 'градусник'] },
+];
+
+// ─── NAVIGATION ─────────────────────────────────────────────────────────────
+
+function setPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (name === 'guide') buildGuide();
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'search-modal') {
+    setTimeout(() => document.getElementById('searchInput').focus(), 100);
+  }
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'camera-modal') stopCamera();
+}
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.classList.remove('open');
+      stopCamera();
+    }
+  });
+});
+
+// ─── CATEGORY DISPLAY ────────────────────────────────────────────────────────
+
+let activeCat = null;
+
+function showCat(cat) {
+  const pills = document.querySelectorAll('.cat-pill');
+  const card = document.getElementById('cat-card');
+
+  if (activeCat === cat) {
+    activeCat = null;
+    pills.forEach(p => p.classList.remove('active'));
+    card.classList.remove('visible');
+    return;
+  }
+
+  activeCat = cat;
+  pills.forEach(p => p.classList.remove('active'));
+  document.querySelector(`.cat-pill[data-cat="${cat}"]`).classList.add('active');
+
+  const d = CATEGORIES[cat];
+  card.innerHTML = `
+    <div class="cat-card-header">
+      <div class="cat-emoji">${d.emoji}</div>
+      <div>
+        <div class="cat-name" style="color: ${d.color}">${d.name}</div>
+        <div class="cat-subtitle">${d.subtitle}</div>
+      </div>
+    </div>
+    <div class="cat-bin" style="background: ${d.binColor}; color: ${d.color}">${d.bin}</div>
+    <div class="cat-items">
+      <strong>✅ Можно выбросить</strong>
+      <div class="item-tags">${d.canThrow.map(i => `<span class="item-tag">${i}</span>`).join('')}</div>
+      ${d.cannotThrow.length ? `<strong>❌ Нельзя выбросить</strong>
+      <div class="item-tags">${d.cannotThrow.map(i => `<span class="item-tag">${i}</span>`).join('')}</div>` : ''}
+      <div style="margin-top:10px; padding: 10px 12px; background: var(--surface2); border-radius: 8px; font-size: 12px; color: var(--text-muted); border-left: 3px solid ${d.color};">
+        💡 ${d.tip}
+      </div>
+    </div>
+  `;
+  card.classList.add('visible');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─── GUIDE PAGE ──────────────────────────────────────────────────────────────
+
+function buildGuide() {
+  const container = document.getElementById('guide-list');
+  if (container.children.length > 0) return;
+
+  Object.entries(CATEGORIES).forEach(([key, d]) => {
+    const el = document.createElement('div');
+    el.style.cssText = `background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 18px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s;`;
+    el.innerHTML = `
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+        <span style="font-size:28px;">${d.emoji}</span>
+        <div>
+          <div style="font-family:'Syne',sans-serif; font-size:16px; font-weight:700; color:${d.color}">${d.name}</div>
+          <div style="font-size:12px; color:var(--text-muted)">${d.bin}</div>
+        </div>
+      </div>
+      <div style="font-size:12px; color: var(--text-muted); line-height:1.7;">
+        <strong style="color:var(--text); display:block; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Принимается:</strong>
+        ${d.canThrow.join(' • ')}
+      </div>
+    `;
+    el.onmouseenter = () => el.style.borderColor = d.color;
+    el.onmouseleave = () => el.style.borderColor = 'var(--border)';
+    container.appendChild(el);
+  });
+}
+
+// ─── CAMERA ──────────────────────────────────────────────────────────────────
+
+let stream = null;
+let selectedPhotoImage = null;
+
+function resetCameraUI() {
+  const video = document.getElementById('videoEl');
+  const photoPreview = document.getElementById('photoPreview');
+
+  video.style.display = 'block';
+  photoPreview.style.display = 'none';
+  photoPreview.src = '';
+  selectedPhotoImage = null;
+
+  document.getElementById('cam-overlay-placeholder').style.display = 'flex';
+  document.getElementById('cam-scan-overlay').style.display = 'none';
+  document.getElementById('camStartBtn').style.display = 'flex';
+  document.getElementById('camSnapBtn').style.display = 'none';
+  document.getElementById('camUsePhotoBtn').style.display = 'none';
+  document.getElementById('camStopBtn').style.display = 'none';
+  document.getElementById('cam-result').classList.remove('visible');
+}
+
+async function startCamera() {
+  if (!window.isSecureContext) {
+    alert('Живая камера работает только в безопасном режиме. Опубликуй проект на GitHub Pages и открой сайт по HTTPS.');
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Живая камера в этом браузере недоступна. Используй кнопку «Сделать фото».');
+    return;
+  }
+
+  try {
+    stopCamera(false);
+
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    };
+
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const video = document.getElementById('videoEl');
+    const photoPreview = document.getElementById('photoPreview');
+
+    photoPreview.style.display = 'none';
+    photoPreview.src = '';
+    selectedPhotoImage = null;
+
+    video.style.display = 'block';
+    video.srcObject = stream;
+    await video.play();
+
+    document.getElementById('cam-overlay-placeholder').style.display = 'none';
+    document.getElementById('cam-scan-overlay').style.display = 'flex';
+    document.getElementById('camStartBtn').style.display = 'none';
+    document.getElementById('camSnapBtn').style.display = 'flex';
+    document.getElementById('camUsePhotoBtn').style.display = 'none';
+    document.getElementById('camStopBtn').style.display = 'flex';
+
+  } catch (err) {
+    let msg = '';
+    if (err.name === 'NotAllowedError') {
+      msg = 'Доступ к камере запрещён. Разреши доступ в настройках браузера.';
+    } else if (err.name === 'NotFoundError') {
+      msg = 'Камера не найдена на устройстве.';
+    } else if (err.name === 'NotReadableError') {
+      msg = 'Камера занята другим приложением.';
+    } else if (err.name === 'OverconstrainedError') {
+      msg = 'Камера не поддерживает запрошенные параметры.';
+    } else if (err.name === 'SecurityError') {
+      msg = 'Ошибка безопасности: открой сайт по HTTPS на GitHub Pages.';
+    } else {
+      msg = `Ошибка: ${err.name} — ${err.message}`;
+    }
+    alert(msg);
+  }
+}
+
+function stopCamera(resetResult = true) {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+
+  const video = document.getElementById('videoEl');
+  video.pause?.();
+  video.srcObject = null;
+
+  if (resetResult) resetCameraUI();
+}
+
+// ─── МОДЕЛЬ ──────────────────────────────────────────────────────────────────
+
+let model = null;
+const CLASSES = ['glass', 'metal', 'paper', 'plastic'];
+
+function setModelStatus(msg, color) {
+  const el = document.getElementById('model-status');
+  if (!el) return;
+  el.style.borderLeftColor = color;
+  el.querySelector('div').textContent = msg;
+  el.querySelector('div').style.color = color;
+}
+
+(async () => {
+  try {
+    model = await tf.loadLayersModel('./tfjs_model/model.json');
+    console.log('✅ Модель загружена (layers)');
+    setModelStatus('✅ Модель загружена. Можно снимать фото или включать камеру.', 'var(--accent)');
+  } catch (e1) {
+    console.warn('loadLayersModel не сработал, пробуем loadGraphModel...', e1.message);
+    try {
+      model = await tf.loadGraphModel('./tfjs_model/model.json');
+      console.log('✅ Модель загружена (graph)');
+      setModelStatus('✅ Модель загружена. Можно снимать фото или включать камеру.', 'var(--accent)');
+    } catch (e2) {
+      console.error('❌ Не удалось загрузить модель:', e2.message);
+      setModelStatus('❌ Модель не загрузилась. Проверь, что папка tfjs_model лежит рядом с index.html и загружена в репозиторий.', 'var(--hazard)');
+    }
+  }
+})();
+
+// ─── АНАЛИЗ ФОТО ─────────────────────────────────────────────────────────────
+
+document.getElementById('photoInput').addEventListener('change', handlePickedPhoto);
+
+async function handlePickedPhoto(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  stopCamera(false);
+
+  const photoPreview = document.getElementById('photoPreview');
+  const video = document.getElementById('videoEl');
+  const objectUrl = URL.createObjectURL(file);
+  const img = new Image();
+
+  img.onload = () => {
+    selectedPhotoImage = img;
+    photoPreview.src = objectUrl;
+    photoPreview.style.display = 'block';
+    video.style.display = 'none';
+
+    document.getElementById('cam-overlay-placeholder').style.display = 'none';
+    document.getElementById('cam-scan-overlay').style.display = 'none';
+    document.getElementById('camStartBtn').style.display = 'flex';
+    document.getElementById('camSnapBtn').style.display = 'none';
+    document.getElementById('camUsePhotoBtn').style.display = 'flex';
+    document.getElementById('camStopBtn').style.display = 'flex';
+    document.getElementById('cam-result').classList.remove('visible');
+  };
+
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    alert('Не удалось открыть выбранное фото.');
+  };
+
+  img.src = objectUrl;
+  event.target.value = '';
+}
+
+async function analyzeImageElement(sourceEl) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 224;
+  canvas.height = 224;
+  canvas.getContext('2d').drawImage(sourceEl, 0, 0, 224, 224);
+
+  const tensor = tf.tidy(() =>
+    tf.browser.fromPixels(canvas)
+      .toFloat()
+      .div(tf.scalar(127.5))
+      .sub(tf.scalar(1.0))
+      .expandDims(0)
+  );
+
+  const predictionOutput = typeof model.predict === 'function'
+    ? model.predict(tensor)
+    : model.execute(tensor);
+
+  const probs = await predictionOutput.data();
+  const classIdx = Array.from(probs).indexOf(Math.max(...probs));
+  const confidence = Math.round(probs[classIdx] * 100);
+  const wasteClass = CLASSES[classIdx];
+
+  tensor.dispose();
+  predictionOutput.dispose?.();
+
+  const catData = CATEGORIES[wasteClass];
+  document.getElementById('result-type-text').textContent = catData.name;
+  document.getElementById('result-type-text').style.color = catData.color;
+  document.getElementById('result-bin-text').textContent = catData.bin;
+  document.getElementById('result-action').textContent = catData.tip;
+  document.getElementById('conf-pct').textContent = confidence + '%';
+
+  const fill = document.getElementById('conf-fill');
+  fill.style.width = '0%';
+  fill.style.background = catData.color;
+  setTimeout(() => fill.style.width = confidence + '%', 100);
+
+  document.getElementById('cam-result').classList.add('visible');
+}
+
+async function runAnalysisWithButton(btn, sourceEl, idleText, busyText) {
+  if (!model) {
+    alert('Модель ещё не загружена. Подожди пару секунд и попробуй снова.');
+    return;
+  }
+
+  btn.textContent = busyText;
+  btn.disabled = true;
+
+  try {
+    await analyzeImageElement(sourceEl);
+  } catch (err) {
+    alert('Ошибка при анализе: ' + err.message);
+    console.error(err);
+  } finally {
+    btn.textContent = idleText;
+    btn.disabled = false;
+  }
+}
+
+async function analyzePhoto() {
+  const video = document.getElementById('videoEl');
+  if (!stream || !video.srcObject) {
+    alert('Сначала включи живую камеру или используй кнопку «Сделать фото».');
+    return;
+  }
+
+  await runAnalysisWithButton(
+    document.getElementById('camSnapBtn'),
+    video,
+    '🤖 Анализировать кадр',
+    '⏳ Анализирую...'
+  );
+}
+
+async function analyzeSelectedPhoto() {
+  if (!selectedPhotoImage) {
+    alert('Сначала выбери фото.');
+    return;
+  }
+
+  await runAnalysisWithButton(
+    document.getElementById('camUsePhotoBtn'),
+    selectedPhotoImage,
+    '🧠 Анализировать фото',
+    '⏳ Анализирую фото...'
+  );
+}
+
+// ─── SEARCH ──────────────────────────────────────────────────────────────────
+
+function doSearch(query) {
+  const container = document.getElementById('search-results');
+  if (!query.trim()) {
+    container.innerHTML = `<div class="no-results"><div class="nr-icon">🔎</div>Начни вводить название продукта</div>`;
+    return;
+  }
+
+  const q = query.toLowerCase().trim();
+  const results = WASTE_DB.filter(item =>
+    item.name.toLowerCase().includes(q) ||
+    item.keywords.some(k => k.toLowerCase().includes(q))
+  );
+
+  if (results.length === 0) {
+    container.innerHTML = `<div class="no-results"><div class="nr-icon">😕</div>Ничего не найдено по запросу «${query}»<br><br><span style="font-size:12px;">Попробуй другое название</span></div>`;
+    return;
+  }
+
+  container.innerHTML = results.map(item => {
+    const d = CATEGORIES[item.cat];
+    return `
+      <div class="search-item" onclick="showSearchResult('${item.cat}', '${item.name}')">
+        <div class="si-icon" style="background: ${d.binColor}">${d.emoji}</div>
+        <div class="si-info">
+          <div class="si-name">${item.name}</div>
+          <div class="si-type">${d.bin}</div>
+        </div>
+        <span class="si-badge" style="background: ${d.binColor}; color: ${d.color}">${d.name}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function showSearchResult(cat, itemName) {
+  closeModal('search-modal');
+  const el = document.getElementById('page-home');
+  el.classList.add('active');
+  setTimeout(() => showCat(cat), 100);
+}
+
+resetCameraUI();
+</script>
+</body>
+</html>
