@@ -1231,23 +1231,35 @@ function setModelStatus(msg, color) {
   el.querySelector('div').style.color = color;
 }
 
-(async () => {
+async function loadModel() {
   try {
+    setModelStatus('⏳ Загружаем модель...', 'var(--warning)');
+    
     model = await tf.loadLayersModel('./tfjs_model/model.json');
-    console.log('✅ Модель загружена (layers)');
-    setModelStatus('✅ Модель загружена. Можно снимать фото или включать камеру.', 'var(--accent)');
+    
+    setModelStatus('✅ Модель загружена', 'var(--success)');
+    console.log('Модель успешно загружена');
   } catch (e1) {
-    console.warn('loadLayersModel не сработал, пробуем loadGraphModel...', e1.message);
+    console.error('loadLayersModel error:', e1);
+
     try {
+      console.warn('loadLayersModel не сработал, пробуем loadGraphModel...', e1.message);
       model = await tf.loadGraphModel('./tfjs_model/model.json');
-      console.log('✅ Модель загружена (graph)');
-      setModelStatus('✅ Модель загружена. Можно снимать фото или включать камеру.', 'var(--accent)');
+      setModelStatus('✅ Модель загружена (GraphModel)', 'var(--success)');
+      console.log('GraphModel успешно загружена');
     } catch (e2) {
-      console.error('❌ Не удалось загрузить модель:', e2.message);
-      setModelStatus('❌ Модель не загрузилась. Проверь, что папка tfjs_model лежит рядом с index.html и загружена в репозиторий.', 'var(--hazard)');
+      console.error('loadGraphModel error:', e2);
+
+      const msg = `
+❌ Модель не загрузилась:
+loadLayersModel: ${e1?.message || e1}
+loadGraphModel: ${e2?.message || e2}
+      `.trim();
+
+      setModelStatus(msg, 'var(--hazard)');
     }
   }
-})();
+}
 
 // ─── АНАЛИЗ ФОТО ─────────────────────────────────────────────────────────────
 
