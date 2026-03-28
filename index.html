@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ВТОРник — Умная сортировка мусора</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=PyjL_rI53Y1tfF7tJSqRzbETpAwOw2ED3iy1LULRp38akkTVaB2vwcivDbwpKTc5l40Paciue92BmYa_atQCwNqN0ax_E6aLOrsUEeUbBPApWyFcmbHG3L-VjpQTE3fHE-Qpnqq7usMkPE9dni-nqFePzIysBtTYUy1-lwifUC-eK-n8j6lIAAg8QImfn2y05o0q2V6-N6F_yAUaWBa9o72Ajs8b3vdb9VApKIRYjMxp62RMd-9QhBywa0tVUTSmFywUK_GmIvUnJYbzzRSZFw" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMGYwZTg3MjJmOWY3Mjg4YTNkNDljYWZhMCZ0cz00OTI5MzAmcD1mcyZjaWQ9MSZzaWc9MmE5YWEzMjFiZjNlZjBlZjFmN2QyZjVhNzNmY2FkNzQ0OWZiNWNmODc4ZmJkY2ViZDZjZWE4MWJkZDUyZWUxZSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=vcZPhGKVUsdvQ3bWHMF5w2T4PzHvFbMvdQHq42O-g_72f7qFSOoeO1GhQSUNeX7z1fEL0SITHc5CxGkzoZ5rkan66_VOa4oSbtb86eV2RK198xVABt6XZ43DLvNG03hck8gGiGmicLN3QFqA0yimrhsMeHQGfPE8P6BFMNBKbDKZVNvUhPFE14jkwnf_CYaGhoakmyh4sG0sTu-VpghvWx5mAjKwoCPva1YeDsBruYRY8CdAchW4LAMTOKJ7YLvTpx9ZUDeGAr7vmTUimCRVvQ" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMGU5MDQ3MjBhODk1MDBlNGFiZDIyNDY3NSZ0cz00OTI5NjMmcD1mcyZjaWQ9MSZzaWc9ZjM3NGYyZTc2ODlhZjQyYWMxZTZhZjdkZDg1YzM2MDI2YzVmZWI3NGJjZDQ3NmUxNzM3MmIyNzI1ODBmMjg4MSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -1220,9 +1220,9 @@ function stopCamera(resetResult = true) {
 
 // ─── МОДЕЛЬ ──────────────────────────────────────────────────────────────────
 
-let model = null;
+let session = null;
+const MODEL_INPUT_NAME = 'input';
 const CLASSES = ['glass', 'metal', 'paper', 'plastic'];
-
 
 function setModelStatus(message, color = 'var(--text-muted)') {
   const statusEl = document.getElementById('model-status');
@@ -1235,57 +1235,47 @@ function setModelStatus(message, color = 'var(--text-muted)') {
 }
 
 async function loadModel() {
-  const modelUrl = new URL('./tfjs_model/model.json', window.location.href).href;
+  const modelUrl = new URL('./model.onnx', window.location.href).href;
 
   try {
     setModelStatus(
-      `⏳ Загружаем модель...\n${modelUrl}`,
+      `⏳ Загружаем ONNX-модель...
+${modelUrl}`,
       'var(--text-muted)'
     );
 
-    console.log('Пробуем загрузить LayersModel:', modelUrl);
+    session = await ort.InferenceSession.create(modelUrl, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all'
+    });
 
-    model = await tf.loadLayersModel(modelUrl);
+    console.log('ONNX model loaded');
+    console.log('Inputs:', session.inputNames);
+    console.log('Outputs:', session.outputNames);
 
-    console.log('Модель успешно загружена как LayersModel');
     setModelStatus(
-      `✅ Модель загружена\n${modelUrl}`,
+      `✅ Модель загружена
+${modelUrl}`,
       'var(--accent)'
     );
-    return;
-  } catch (e1) {
-    console.error('loadLayersModel error:', e1);
+  } catch (err) {
+    console.error('ONNX load error:', err);
 
-    try {
-      console.log('Пробуем загрузить GraphModel:', modelUrl);
+    const details = [
+      '❌ Модель не загрузилась',
+      '',
+      `URL: ${modelUrl}`,
+      '',
+      `Ошибка: ${err?.message || String(err)}`,
+      '',
+      'Проверь:',
+      '1) лежит ли model.onnx рядом с index.html',
+      '2) открывается ли URL выше вручную',
+      '3) не закешировалась ли старая версия страницы'
+    ].join('
+');
 
-      model = await tf.loadGraphModel(modelUrl);
-
-      console.log('Модель успешно загружена как GraphModel');
-      setModelStatus(
-        `✅ Модель загружена (GraphModel)\n${modelUrl}`,
-        'var(--accent)'
-      );
-      return;
-    } catch (e2) {
-      console.error('loadGraphModel error:', e2);
-
-      const details = [
-        '❌ Модель не загрузилась',
-        '',
-        `URL: ${modelUrl}`,
-        '',
-        `loadLayersModel: ${e1?.message || String(e1)}`,
-        `loadGraphModel: ${e2?.message || String(e2)}`,
-        '',
-        'Проверь:',
-        '1) открывается ли URL выше вручную',
-        '2) нет ли 404',
-        '3) не закешировалась ли старая версия страницы'
-      ].join('\n');
-
-      setModelStatus(details, 'var(--hazard)');
-    }
+    setModelStatus(details, 'var(--hazard)');
   }
 }
 
@@ -1333,30 +1323,38 @@ async function handlePickedPhoto(event) {
 }
 
 async function analyzeImageElement(sourceEl) {
+  if (!session) {
+    throw new Error('Модель ещё не загружена');
+  }
+
   const canvas = document.createElement('canvas');
   canvas.width = 224;
   canvas.height = 224;
-  canvas.getContext('2d').drawImage(sourceEl, 0, 0, 224, 224);
 
-  const tensor = tf.tidy(() =>
-    tf.browser.fromPixels(canvas)
-      .toFloat()
-      .div(tf.scalar(127.5))
-      .sub(tf.scalar(1.0))
-      .expandDims(0)
-  );
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(sourceEl, 0, 0, 224, 224);
 
-  const predictionOutput = typeof model.predict === 'function'
-    ? model.predict(tensor)
-    : model.execute(tensor);
+  const imageData = ctx.getImageData(0, 0, 224, 224).data;
+  const inputData = new Float32Array(1 * 224 * 224 * 3);
 
-  const probs = await predictionOutput.data();
-  const classIdx = Array.from(probs).indexOf(Math.max(...probs));
-  const confidence = Math.round(probs[classIdx] * 100);
+  for (let i = 0; i < 224 * 224; i++) {
+    inputData[i * 3 + 0] = imageData[i * 4 + 0] / 127.5 - 1.0;
+    inputData[i * 3 + 1] = imageData[i * 4 + 1] / 127.5 - 1.0;
+    inputData[i * 3 + 2] = imageData[i * 4 + 2] / 127.5 - 1.0;
+  }
+
+  const inputTensor = new ort.Tensor('float32', inputData, [1, 224, 224, 3]);
+  const feeds = { [MODEL_INPUT_NAME]: inputTensor };
+  const results = await session.run(feeds);
+
+  const outputName = session.outputNames?.[0] || Object.keys(results)[0];
+  const output = results[outputName];
+  const probs = Array.from(output.data);
+
+  const maxProb = Math.max(...probs);
+  const classIdx = probs.indexOf(maxProb);
+  const confidence = Math.round(maxProb * 100);
   const wasteClass = CLASSES[classIdx];
-
-  tensor.dispose();
-  predictionOutput.dispose?.();
 
   const catData = CATEGORIES[wasteClass];
   document.getElementById('result-type-text').textContent = catData.name;
@@ -1374,7 +1372,7 @@ async function analyzeImageElement(sourceEl) {
 }
 
 async function runAnalysisWithButton(btn, sourceEl, idleText, busyText) {
-  if (!model) {
+  if (!session) {
     alert('Модель ещё не загружена. Подожди пару секунд и попробуй снова.');
     return;
   }
