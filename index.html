@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ВТОРник — Умная сортировка мусора</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=cKVJN4d4FGE3s4fVJCvFkfapdirT378rTG0qpXdTYZXY5FOt1wY-qgSomraBnPKn1lYATVbfJcjtXNYb8HO5KJ0cyzg4ZRfzlOisVOS28sYj2anptXeLMS36TK1rfQ91O3bNQYhs2zlLfMvNPpEcdQadvFEeSGTDucdf0jOlAzwc7SPGs1WrLaT_y3HXkPTRi8fcp3DfBP2ppqsSin2fcK0NFGNhtk3Ty15RSFJU1FSU5oYsZmp6fKNfooIsyfMuj-Wz3ygjD5DxJlimqJ9gvw" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMDJlMjg3MjQ2ODdjNzE5NTcxZWZjMzhhZSZ0cz00OTI5NjQmcD1mcyZjaWQ9MSZzaWc9N2E3ZDAxYzlhMGJlZmRlYjc0MjBmOGJjZjkzZTIxMGZmMDE1ZGM2MWIwZjExNmE3ZGY4MGI2MTVmNmU4YzIyYSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=S_w4kHoYx8055vsRngfQZKawC6vYKXP7Nu_Aon1rFCy4_Vpdk5h2fv_TmGcl3bjL7fTFoK3RJ63o-LWFGC8ZtTpMshp_aqQHoAjHFKh_rtjUgIQjj89rhHWkYumw8mMFvipK8JsOuRvQO3vK5J6hK8hz3PaSZWJhAM2Z3LWR3ZTcOdcdZ6SVKQHDEzFVMIvcRktotBHthCfBoqZZvAtIePiZTLEvy9RpSMzMYTFW7TyB9ZbZDuj70rFpC6_v1oYfVwVa_oQ1YvBvhQgYqLubcw" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMGMzM2M3MjQ2ODFjM2Y5OTQ0ZTkxNjI5YiZ0cz00OTI5NjQmcD1mcyZjaWQ9MSZzaWc9MjRhNTRjZDc1ZjE4YTViZjhjNTZkNjNlNTk5OTQxNWFkMDU3ZjY2MWYzZGQ3ZjI2ZTg1ZGNiODQ4YzFhZjFlNSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -1329,9 +1329,9 @@ async function analyzeImageElement(sourceEl) {
   const inputData = new Float32Array(1 * 224 * 224 * 3);
 
   for (let i = 0; i < 224 * 224; i++) {
-    inputData[i * 3 + 0] = imageData[i * 4 + 0] / 127.5 - 1.0;
-    inputData[i * 3 + 1] = imageData[i * 4 + 1] / 127.5 - 1.0;
-    inputData[i * 3 + 2] = imageData[i * 4 + 2] / 127.5 - 1.0;
+    inputData[i * 3 + 0] = imageData[i * 4 + 0];
+    inputData[i * 3 + 1] = imageData[i * 4 + 1];
+    inputData[i * 3 + 2] = imageData[i * 4 + 2];
   }
 
   const inputTensor = new ort.Tensor('float32', inputData, [1, 224, 224, 3]);
@@ -1340,12 +1340,19 @@ async function analyzeImageElement(sourceEl) {
 
   const outputName = session.outputNames?.[0] || Object.keys(results)[0];
   const output = results[outputName];
-  const probs = Array.from(output.data);
+  const logits = Array.from(output.data);
+
+  const maxLogit = Math.max(...logits);
+  const exps = logits.map(x => Math.exp(x - maxLogit));
+  const sumExps = exps.reduce((a, b) => a + b, 0);
+  const probs = exps.map(x => x / sumExps);
 
   const maxProb = Math.max(...probs);
   const classIdx = probs.indexOf(maxProb);
   const confidence = Math.round(maxProb * 100);
   const wasteClass = CLASSES[classIdx];
+  console.log('Model probs:', probs);
+  console.log('Predicted class:', wasteClass, 'confidence:', confidence + '%');
 
   const catData = CATEGORIES[wasteClass];
   document.getElementById('result-type-text').textContent = catData.name;
