@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ВТОРник — Умная сортировка мусора</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=fDRnJAQO7SEIU1V7al9HAy3gwFX0D8ZgQNxLwvG0_pG5xjPmitQDhOjdpuljEKkActnLKMC46OFRRcMVeK1sF4ZiQwpivMBLQpk3UgWXHGFwEoCDAN00HYTxNN78DWTRkDsoeHUgy_XMFy1V2p4oWaf5lHOVk3ichyv0rFRb6zAvWUviAlaipOqSZAw-8j8Iq-AqFpqxcTslDij9y-K33sn-go8Atj2vYoX1MXhnpcYYiFkkXJe7hXYvLbnkELhZoeqqCdxIYxDqPWwIxmYjvA" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMGNhYTQ3MjQ2OGNhMzVlNzhmN2Y4YzgxMiZ0cz00OTI5NjQmcD1mcyZjaWQ9MSZzaWc9NWZhMWViNDQyODY2ODlhMDA3MGRhNjQwNjc2N2RkZDc1YjgzOTg3MDc0OTQwMjBjMDIwOTA4ZWRlZTg4ZjQ1ZSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=cKVJN4d4FGE3s4fVJCvFkfapdirT378rTG0qpXdTYZXY5FOt1wY-qgSomraBnPKn1lYATVbfJcjtXNYb8HO5KJ0cyzg4ZRfzlOisVOS28sYj2anptXeLMS36TK1rfQ91O3bNQYhs2zlLfMvNPpEcdQadvFEeSGTDucdf0jOlAzwc7SPGs1WrLaT_y3HXkPTRi8fcp3DfBP2ppqsSin2fcK0NFGNhtk3Ty15RSFJU1FSU5oYsZmp6fKNfooIsyfMuj-Wz3ygjD5DxJlimqJ9gvw" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMDJlMjg3MjQ2ODdjNzE5NTcxZWZjMzhhZSZ0cz00OTI5NjQmcD1mcyZjaWQ9MSZzaWc9N2E3ZDAxYzlhMGJlZmRlYjc0MjBmOGJjZjkzZTIxMGZmMDE1ZGM2MWIwZjExNmE3ZGY4MGI2MTVmNmU4YzIyYSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -1238,8 +1238,7 @@ async function loadModel() {
   const modelUrl = new URL('./model.onnx', window.location.href).href;
 
   try {
-    setModelStatus('⏳ Загружаем ONNX-модель...
-' + modelUrl, 'var(--text-muted)');
+    setModelStatus('⏳ Загружаем ONNX-модель...\n' + modelUrl, 'var(--text-muted)');
 
     session = await ort.InferenceSession.create(modelUrl, {
       executionProviders: ['wasm'],
@@ -1250,8 +1249,7 @@ async function loadModel() {
     console.log('Inputs:', session.inputNames);
     console.log('Outputs:', session.outputNames);
 
-    setModelStatus('✅ Модель загружена
-' + modelUrl, 'var(--accent)');
+    setModelStatus('✅ Модель загружена\n' + modelUrl, 'var(--accent)');
   } catch (err) {
     console.error('ONNX load error:', err);
 
