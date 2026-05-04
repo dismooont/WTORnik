@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ВТОРник — Умная сортировка мусора</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -1211,59 +1210,41 @@ function stopCamera(resetResult = true) {
   if (resetResult) resetCameraUI();
 }
 
-// ─── МОДЕЛЬ ──────────────────────────────────────────────────────────────────
+// ─── API ─────────────────────────────────────────────────────────────────────
 
-let session = null;
+const API_URL = 'http://localhost:8000/classify';
+const API_KEY = 'dev-key-change-me';
+
 const CLASSES = ['glass', 'metal', 'paper', 'plastic'];
 
 function setModelStatus(message, color = 'var(--text-muted)') {
   const statusEl = document.getElementById('model-status');
   if (!statusEl) return;
-
   statusEl.style.display = 'block';
   statusEl.style.color = color;
   statusEl.style.whiteSpace = 'pre-wrap';
   statusEl.textContent = message;
 }
 
-async function loadModel() {
-  const modelUrl = new URL('./model.onnx', window.location.href).href;
-
+async function pingApi() {
+  const healthUrl = API_URL.replace(/\/classify$/, '/');
   try {
-    setModelStatus('⏳ Загружаем ONNX-модель...\n' + modelUrl, 'var(--text-muted)');
-
-    session = await ort.InferenceSession.create(modelUrl, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all'
-    });
-
-    console.log('ONNX model loaded');
-    console.log('Inputs:', session.inputNames);
-    console.log('Outputs:', session.outputNames);
-
-    setModelStatus('✅ Модель загружена\n' + modelUrl, 'var(--accent)');
+    setModelStatus('⏳ Проверяем API...\n' + healthUrl);
+    const resp = await fetch(healthUrl, { method: 'GET' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    setModelStatus('✅ API доступен\n' + healthUrl + '\nКлассы: ' + (data.classes || []).join(', '), 'var(--accent)');
   } catch (err) {
-    console.error('ONNX load error:', err);
-
-    const details = [
-      '❌ Модель не загрузилась',
-      '',
-      'URL: ' + modelUrl,
-      '',
-      'Ошибка: ' + (err?.message || String(err)),
-      '',
-      'Проверь:',
-      '1) лежит ли model.onnx рядом с index.html',
-      '2) открывается ли URL выше вручную',
-      '3) не закешировалась ли старая версия страницы'
-    ].join('\n');
-
-    setModelStatus(details, 'var(--hazard)');
+    setModelStatus(
+      '⚠️ API не отвечает\n' + healthUrl + '\n\nОшибка: ' + (err?.message || String(err)) +
+      '\n\nЗапусти бэкенд:\n  cd backend && uvicorn app:app --port 8000',
+      'var(--hazard)'
+    );
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadModel();
+  pingApi();
 });
 
 // ─── АНАЛИЗ ФОТО ─────────────────────────────────────────────────────────────
@@ -1306,46 +1287,37 @@ async function handlePickedPhoto(event) {
 }
 
 async function analyzeImageElement(sourceEl) {
-  if (!session) {
-    throw new Error('Модель ещё не загружена');
-  }
-
   const canvas = document.createElement('canvas');
   canvas.width = 224;
   canvas.height = 224;
+  canvas.getContext('2d').drawImage(sourceEl, 0, 0, 224, 224);
 
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(sourceEl, 0, 0, 224, 224);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (!blob) throw new Error('Не удалось подготовить изображение');
 
-  const imageData = ctx.getImageData(0, 0, 224, 224).data;
-  const inputData = new Float32Array(1 * 224 * 224 * 3);
+  const fd = new FormData();
+  fd.append('image', blob, 'frame.jpg');
 
-  for (let i = 0; i < 224 * 224; i++) {
-    inputData[i * 3 + 0] = imageData[i * 4 + 0] / 127.5 - 1.0;
-    inputData[i * 3 + 1] = imageData[i * 4 + 1] / 127.5 - 1.0;
-    inputData[i * 3 + 2] = imageData[i * 4 + 2] / 127.5 - 1.0;
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'X-API-Key': API_KEY },
+    body: fd
+  });
+
+  if (!resp.ok) {
+    let detail = 'HTTP ' + resp.status;
+    try { detail = (await resp.json()).detail || detail; } catch {}
+    throw new Error('API: ' + detail);
   }
 
-  const inputName = session.inputNames[0];
-  const inputTensor = new ort.Tensor('float32', inputData, [1, 224, 224, 3]);
-  const feeds = { [inputName]: inputTensor };
-  const results = await session.run(feeds);
+  const data = await resp.json();
+  const wasteClass = data.class;
+  const confidence = Math.round((data.confidence || 0) * 100);
+  console.log('API response:', data);
 
-  const outputName = session.outputNames?.[0] || Object.keys(results)[0];
-  const output = results[outputName];
-  const logits = Array.from(output.data);
-
-  const maxLogit = Math.max(...logits);
-  const exps = logits.map(x => Math.exp(x - maxLogit));
-  const sumExps = exps.reduce((a, b) => a + b, 0);
-  const probs = exps.map(x => x / sumExps);
-
-  const maxProb = Math.max(...probs);
-  const classIdx = probs.indexOf(maxProb);
-  const confidence = Math.round(maxProb * 100);
-  const wasteClass = CLASSES[classIdx];
-  console.log('Model probs:', probs);
-  console.log('Predicted class:', wasteClass, 'confidence:', confidence + '%');
+  if (!CATEGORIES[wasteClass]) {
+    throw new Error('Неизвестный класс от API: ' + wasteClass);
+  }
 
   const catData = CATEGORIES[wasteClass];
   const canItems = catData.canThrow.slice(0, 5).map(i =>
@@ -1392,11 +1364,6 @@ async function analyzeImageElement(sourceEl) {
 }
 
 async function runAnalysisWithButton(btn, sourceEl, idleText, busyText) {
-  if (!session) {
-    alert('Модель ещё не загружена. Подожди пару секунд и попробуй снова.');
-    return;
-  }
-
   btn.textContent = busyText;
   btn.disabled = true;
 
