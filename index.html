@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ВТОРник — Умная сортировка мусора</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=S_w4kHoYx8055vsRngfQZKawC6vYKXP7Nu_Aon1rFCy4_Vpdk5h2fv_TmGcl3bjL7fTFoK3RJ63o-LWFGC8ZtTpMshp_aqQHoAjHFKh_rtjUgIQjj89rhHWkYumw8mMFvipK8JsOuRvQO3vK5J6hK8hz3PaSZWJhAM2Z3LWR3ZTcOdcdZ6SVKQHDEzFVMIvcRktotBHthCfBoqZZvAtIePiZTLEvy9RpSMzMYTFW7TyB9ZbZDuj70rFpC6_v1oYfVwVa_oQ1YvBvhQgYqLubcw" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMGMzM2M3MjQ2ODFjM2Y5OTQ0ZTkxNjI5YiZ0cz00OTI5NjQmcD1mcyZjaWQ9MSZzaWc9MjRhNTRjZDc1ZjE4YTViZjhjNTZkNjNlNTk5OTQxNWFkMDU3ZjY2MWYzZGQ3ZjI2ZTg1ZGNiODQ4YzFhZjFlNSZ2PTA"/><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -867,22 +867,7 @@
         <button class="btn-primary btn-outline" id="camStopBtn" onclick="stopCamera()" style="display:none; max-width: 88px; flex: 0 0 88px;">⏹ Стоп</button>
       </div>
 
-      <div class="result-card" id="cam-result">
-        <div class="result-label">Результат анализа</div>
-        <div class="result-type" id="result-type-text">—</div>
-        <div class="result-bin-info" id="result-bin-text">—</div>
-        <div class="confidence-bar">
-          <div class="confidence-fill" id="conf-fill" style="width: 0%"></div>
-        </div>
-        <div class="confidence-label">
-          <span>Уверенность модели</span>
-          <span id="conf-pct">—</span>
-        </div>
-        <div style="margin-top:12px; padding-top:12px; border-top: 1px solid var(--border);">
-          <div style="font-size:11px; color: var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.8px;">Что делать:</div>
-          <div id="result-action" style="font-size:13px; line-height:1.6;"></div>
-        </div>
-      </div>
+      <div class="result-card" id="cam-result"></div>
 
       <div id="model-status" style="margin-top: 12px; padding: 10px 14px; background: var(--surface2); border-radius: 10px; border-left: 3px solid var(--text-muted);">
         <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">⏳ Загрузка модели...</div>
@@ -1017,6 +1002,14 @@ const WASTE_DB = [
   { name: 'Лекарства', cat: 'hazard', keywords: ['лекарство', 'таблетки', 'препарат', 'медикамент', 'аптека'] },
   { name: 'Краска', cat: 'hazard', keywords: ['краска', 'растворитель', 'лак', 'эмаль'] },
   { name: 'Ртутный термометр', cat: 'hazard', keywords: ['термометр', 'ртуть', 'градусник'] },
+  { name: 'Металлическая крышка', cat: 'metal', keywords: ['крышка металл', 'крышка от банки', 'закрутка'] },
+  { name: 'Пустой аэрозоль', cat: 'metal', keywords: ['аэрозоль', 'дезодорант', 'баллончик', 'спрей'] },
+  { name: 'Алюминиевый лоток', cat: 'metal', keywords: ['лоток алюминий', 'форма для выпечки', 'контейнер фольга'] },
+  { name: 'Чайный пакетик', cat: 'organic', keywords: ['чай', 'чайный пакет', 'заварка'] },
+  { name: 'Яичная скорлупа', cat: 'organic', keywords: ['яйцо', 'скорлупа', 'яичная'] },
+  { name: 'Книга', cat: 'paper', keywords: ['книга', 'учебник', 'справочник'] },
+  { name: 'Бумажный стакан', cat: 'hazard', keywords: ['стакан бумажный', 'кофейный стакан', 'одноразовый стакан'] },
+  { name: 'Чек (термобумага)', cat: 'hazard', keywords: ['чек', 'термобумага', 'кассовый чек', 'квитанция'] },
 ];
 
 // ─── NAVIGATION ─────────────────────────────────────────────────────────────
@@ -1221,7 +1214,6 @@ function stopCamera(resetResult = true) {
 // ─── МОДЕЛЬ ──────────────────────────────────────────────────────────────────
 
 let session = null;
-const MODEL_INPUT_NAME = 'input';
 const CLASSES = ['glass', 'metal', 'paper', 'plastic'];
 
 function setModelStatus(message, color = 'var(--text-muted)') {
@@ -1329,13 +1321,14 @@ async function analyzeImageElement(sourceEl) {
   const inputData = new Float32Array(1 * 224 * 224 * 3);
 
   for (let i = 0; i < 224 * 224; i++) {
-    inputData[i * 3 + 0] = imageData[i * 4 + 0];
-    inputData[i * 3 + 1] = imageData[i * 4 + 1];
-    inputData[i * 3 + 2] = imageData[i * 4 + 2];
+    inputData[i * 3 + 0] = imageData[i * 4 + 0] / 127.5 - 1.0;
+    inputData[i * 3 + 1] = imageData[i * 4 + 1] / 127.5 - 1.0;
+    inputData[i * 3 + 2] = imageData[i * 4 + 2] / 127.5 - 1.0;
   }
 
+  const inputName = session.inputNames[0];
   const inputTensor = new ort.Tensor('float32', inputData, [1, 224, 224, 3]);
-  const feeds = { [MODEL_INPUT_NAME]: inputTensor };
+  const feeds = { [inputName]: inputTensor };
   const results = await session.run(feeds);
 
   const outputName = session.outputNames?.[0] || Object.keys(results)[0];
@@ -1355,18 +1348,47 @@ async function analyzeImageElement(sourceEl) {
   console.log('Predicted class:', wasteClass, 'confidence:', confidence + '%');
 
   const catData = CATEGORIES[wasteClass];
-  document.getElementById('result-type-text').textContent = catData.name;
-  document.getElementById('result-type-text').style.color = catData.color;
-  document.getElementById('result-bin-text').textContent = catData.bin;
-  document.getElementById('result-action').textContent = catData.tip;
-  document.getElementById('conf-pct').textContent = confidence + '%';
+  const canItems = catData.canThrow.slice(0, 5).map(i =>
+    `<span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:12px;">${i}</span>`
+  ).join('');
+  const cantItems = catData.cannotThrow.slice(0, 4).map(i =>
+    `<span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:12px;">${i}</span>`
+  ).join('');
 
-  const fill = document.getElementById('conf-fill');
-  fill.style.width = '0%';
-  fill.style.background = catData.color;
-  setTimeout(() => fill.style.width = confidence + '%', 100);
+  const resultCard = document.getElementById('cam-result');
+  resultCard.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <div style="font-size:28px;width:50px;height:50px;background:${catData.binColor};border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${catData.emoji}</div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:${catData.color};">${catData.name}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${catData.subtitle}</div>
+      </div>
+    </div>
+    <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;background:${catData.binColor};color:${catData.color};margin-bottom:14px;">${catData.bin}</div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;">Уверенность модели</div>
+      <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:4px;">
+        <div id="conf-fill" style="height:100%;width:0%;background:${catData.color};border-radius:2px;transition:width 1s ease;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">
+        <span>AI-анализ</span><span id="conf-pct" style="color:${catData.color};font-weight:600;">0%</span>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">✅ Можно выбросить</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${canItems}</div>
+    ${catData.cannotThrow.length ? `
+    <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">❌ Не бросай сюда</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${cantItems}</div>` : ''}
+    <div style="padding:10px 12px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--text-muted);border-left:3px solid ${catData.color};line-height:1.5;">💡 ${catData.tip}</div>
+  `;
+  resultCard.classList.add('visible');
 
-  document.getElementById('cam-result').classList.add('visible');
+  setTimeout(() => {
+    const fill = document.getElementById('conf-fill');
+    const pct = document.getElementById('conf-pct');
+    if (fill) fill.style.width = confidence + '%';
+    if (pct) pct.textContent = confidence + '%';
+  }, 100);
 }
 
 async function runAnalysisWithButton(btn, sourceEl, idleText, busyText) {
