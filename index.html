@@ -1301,12 +1301,22 @@ async function handlePickedPhoto(event) {
 }
 
 async function analyzeImageElement(sourceEl) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 224;
-  canvas.height = 224;
-  canvas.getContext('2d').drawImage(sourceEl, 0, 0, 224, 224);
+  // Send a higher-resolution image with preserved aspect ratio so the
+  // backend can do proper Resize-232 + CenterCrop-224 (TorchVision standard).
+  // Stretching to 224x224 client-side destroys aspect ratio and accuracy.
+  const MAX_EDGE = 384;
+  const w0 = sourceEl.naturalWidth || sourceEl.videoWidth || sourceEl.width || 224;
+  const h0 = sourceEl.naturalHeight || sourceEl.videoHeight || sourceEl.height || 224;
+  const scale = Math.min(1, MAX_EDGE / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * scale));
+  const h = Math.max(1, Math.round(h0 * scale));
 
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(sourceEl, 0, 0, w, h);
+
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
   if (!blob) throw new Error('Не удалось подготовить изображение');
 
   const fd = new FormData();
