@@ -3,7 +3,17 @@
 POST /classify
   multipart/form-data: image=<JPEG/PNG, <=2MB>
   header X-API-Key: <token>
-  -> { "class": "plastic", "confidence": 0.87, "probs": {"glass":..., ...} }
+  -> {
+        "class": "plastic" | "glass" | "metal" | "paper" | "unknown",
+        "confidence": 0.87,
+        "detected_object": "water_bottle",
+        "probs": {"glass":..., "metal":..., "paper":..., "plastic":...}
+     }
+
+Inference pipeline:
+  JPEG -> PIL resize 224x224 -> NCHW (x/255 - mean) / std -> MobileNetV3-Large
+  -> 1000 ImageNet logits -> softmax -> aggregate by IMAGENET_TO_WASTE
+  -> if waste_total < UNKNOWN_THRESHOLD: "unknown" else argmax of 4 categories.
 """
 
 import io
@@ -21,9 +31,17 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.responses import JSONResponse
 
-CLASSES = ["glass", "metal", "paper", "plastic"]
+from imagenet_classes import IMAGENET_CLASSES
+from imagenet_to_waste import IMAGENET_TO_WASTE
+
+WASTE_CATEGORIES = ("glass", "metal", "paper", "plastic")
+UNKNOWN_THRESHOLD = 0.35
+
 MODEL_PATH = Path(__file__).parent / "model.onnx"
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
+
+IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 API_KEY = os.environ.get("API_KEY", "dev-key-change-me")
 ALLOWED_ORIGINS = [
@@ -40,7 +58,7 @@ input_name = session.get_inputs()[0].name
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["30/minute"])
 
-app = FastAPI(title="ВТОРник classifier", version="1.0.0")
+app = FastAPI(title="ВТОРник classifier", version="2.0.0")
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
@@ -63,7 +81,9 @@ def require_api_key(x_api_key: str = Header(default="")):
 
 def preprocess(raw: bytes) -> np.ndarray:
     img = Image.open(io.BytesIO(raw)).convert("RGB").resize((224, 224), Image.BILINEAR)
-    arr = np.asarray(img, dtype=np.float32) / 127.5 - 1.0
+    arr = np.asarray(img, dtype=np.float32) / 255.0
+    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
+    arr = np.transpose(arr, (2, 0, 1))
     return arr[np.newaxis, ...]
 
 
@@ -73,9 +93,32 @@ def softmax(logits: np.ndarray) -> np.ndarray:
     return exps / exps.sum()
 
 
+def aggregate(probs_1000: np.ndarray) -> tuple[str, float, str, dict[str, float]]:
+    grouped = {c: 0.0 for c in WASTE_CATEGORIES}
+    for idx, cat in IMAGENET_TO_WASTE.items():
+        if cat in grouped:
+            grouped[cat] += float(probs_1000[idx])
+
+    waste_total = sum(grouped.values())
+    top_idx = int(np.argmax(probs_1000))
+    detected = IMAGENET_CLASSES[top_idx]
+
+    if waste_total < UNKNOWN_THRESHOLD:
+        return "unknown", float(waste_total), detected, grouped
+
+    best = max(WASTE_CATEGORIES, key=lambda c: grouped[c])
+    return best, grouped[best], detected, grouped
+
+
 @app.get("/")
 def health():
-    return {"status": "ok", "classes": CLASSES, "input": input_name}
+    return {
+        "status": "ok",
+        "classes": list(WASTE_CATEGORIES) + ["unknown"],
+        "input": input_name,
+        "model": "MobileNetV3-Large (ImageNet1K_V2)",
+        "threshold": UNKNOWN_THRESHOLD,
+    }
 
 
 @app.post("/classify")
@@ -96,12 +139,13 @@ async def classify(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"cannot decode image: {exc}")
 
-    output = session.run(None, {input_name: tensor})[0][0]
-    probs = softmax(output.astype(np.float64))
-    idx = int(np.argmax(probs))
+    logits = session.run(None, {input_name: tensor})[0][0]
+    probs = softmax(logits.astype(np.float64))
+    waste_class, confidence, detected_object, grouped = aggregate(probs)
 
     return {
-        "class": CLASSES[idx],
-        "confidence": float(probs[idx]),
-        "probs": {cls: float(p) for cls, p in zip(CLASSES, probs)},
+        "class": waste_class,
+        "confidence": confidence,
+        "detected_object": detected_object,
+        "probs": grouped,
     }

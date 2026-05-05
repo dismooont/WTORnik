@@ -976,6 +976,17 @@ const CATEGORIES = {
     canThrow: ['Батарейки и аккумуляторы', 'Лампочки (энергосберегающие)', 'Краски и растворители', 'Лекарства с истекшим сроком', 'Ртутные термометры', 'Химикаты'],
     cannotThrow: [],
     tip: '⚠️ Никогда не выбрасывай опасные отходы в обычный мусор!'
+  },
+  unknown: {
+    name: 'Не распознано',
+    emoji: '🤷',
+    color: '#7d8590',
+    binColor: 'rgba(125,133,144,0.15)',
+    bin: '— нужно больше информации',
+    subtitle: 'Не похоже на сортируемый мусор в кадре',
+    canThrow: [],
+    cannotThrow: [],
+    tip: 'Попробуй сделать фото ближе, на однотонном фоне и при хорошем свете. Один предмет в центре кадра распознаётся лучше всего.'
   }
 };
 
@@ -1330,6 +1341,10 @@ async function analyzeImageElement(sourceEl) {
     `<span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:12px;">${i}</span>`
   ).join('');
 
+  const detectedHtml = data.detected_object
+    ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">обнаружено: <span style="color:var(--text);">${data.detected_object}</span></div>`
+    : '';
+
   const resultCard = document.getElementById('cam-result');
   resultCard.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
@@ -1337,6 +1352,7 @@ async function analyzeImageElement(sourceEl) {
       <div>
         <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:${catData.color};">${catData.name}</div>
         <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${catData.subtitle}</div>
+        ${detectedHtml}
       </div>
     </div>
     <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;background:${catData.binColor};color:${catData.color};margin-bottom:14px;">${catData.bin}</div>
@@ -1349,8 +1365,9 @@ async function analyzeImageElement(sourceEl) {
         <span>AI-анализ</span><span id="conf-pct" style="color:${catData.color};font-weight:600;">0%</span>
       </div>
     </div>
+    ${catData.canThrow.length ? `
     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">✅ Можно выбросить</div>
-    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${canItems}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${canItems}</div>` : ''}
     ${catData.cannotThrow.length ? `
     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">❌ Не бросай сюда</div>
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${cantItems}</div>` : ''}
